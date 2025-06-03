@@ -42,6 +42,24 @@ Ensure you have the following model files in the root or `models/` directory:
 ```bash
 streamlit run app.py
 ```
+---
+
+## CSV Uploads
+
+Your CSV file must contain the following column headers:
+
+D10_µm, D50_µm, D90_µm,
+D[2,3], D[3,4],
+Tap_Density_g/cm³, HR,
+Effective_Layer_Thickness_µm,
+Material
+
+eg:
+
+D10_µm,D50_µm,D90_µm,D[2,3],D[3,4],Tap_Density_g/cm³,HR,Effective_Layer_Thickness_µm,Material
+12,32,55,30,40,4.7,1.2,60,Ti-6Al-4V
+15,35,57,33,45,5.3,1.1,60,316L
+10,28,50,25,38,2.5,1.4,60,AlSi10Mg
 
 ---
 

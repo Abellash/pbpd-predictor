@@ -83,3 +83,67 @@ if st.button("Predict PBPD"):
 
     except FileNotFoundError:
         st.error(f"Model for '{material_group.upper()}' not found. Make sure the model file exists.")
+        
+import io
+
+st.markdown("---")
+st.subheader("Batch Prediction via CSV")
+
+csv_file = st.file_uploader("Upload a CSV file for batch prediction", type=["csv"])
+
+if csv_file:
+    df_csv = pd.read_csv(csv_file)
+
+    required_cols = [
+        'D10_µm', 'D50_µm', 'D90_µm',
+        'D[2,3]', 'D[3,4]', 'Tap_Density_g/cm³',
+        'HR', 'Effective_Layer_Thickness_µm', 'Material'
+    ]
+
+    if not all(col in df_csv.columns for col in required_cols):
+        st.error("Missing required columns in CSV.")
+    else:
+        df = df_csv.copy()
+
+      
+        df['Span'] = (df['D90_µm'] - df['D10_µm']) / df['D50_µm']
+        df['R23'] = df['D[2,3]'] / df['Effective_Layer_Thickness_µm']
+        df['R34'] = df['D[3,4]'] / df['Effective_Layer_Thickness_µm']
+
+        predictions = []
+
+        for _, row in df.iterrows():
+            mat = str(row['Material']).lower()
+            if 'ti' in mat:
+                model = joblib.load("model_ti.pkl")
+                features = [row['R23'], row['Span'], row['Tap_Density_g/cm³']]
+                model_used = "Ti"
+            elif 'ss' in mat or '316' in mat:
+                model = joblib.load("model_ss.pkl")
+                features = [row['R23'], row['R34'], row['Span'], row['Tap_Density_g/cm³'], row['HR']]
+                model_used = "SS"
+            elif 'al' in mat:
+                model = joblib.load("model_al.pkl")
+                features = [row['R34'], row['Span'], row['Tap_Density_g/cm³']]
+                model_used = "Al"
+            else:
+                predictions.append(np.nan)
+                continue
+
+            pred = model.predict([features])[0]
+            predictions.append(pred)
+
+        df['Predicted_PBPD_%'] = predictions
+
+        st.success("Batch prediction complete.")
+        st.dataframe(df[['Material', 'Predicted_PBPD_%']].head())
+
+       
+        csv_download = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Download Results as CSV",
+            data=csv_download,
+            file_name="pbpd_predictions.csv",
+            mime="text/csv"
+        )
+

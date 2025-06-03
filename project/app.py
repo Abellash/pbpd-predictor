@@ -151,15 +151,22 @@ if csv_file:
         predictions = []
         for _, row in df.iterrows():
             mat = str(row['Material']).lower()
+            model_used = None
+
             if 'ti' in mat:
-                model = joblib.load("model_ti.pkl")
+                model_used = "ti"
                 features = [row['R23'], row['Span'], row['Tap_Density_g/cm³']]
             elif 'ss' in mat or '316' in mat:
-                model = joblib.load("model_ss.pkl")
+                model_used = "ss"
                 features = [row['R23'], row['R34'], row['Span'], row['Tap_Density_g/cm³'], row['HR']]
             elif 'al' in mat:
-                model = joblib.load("model_al.pkl")
+                model_used = "al"
                 features = [row['R34'], row['Span'], row['Tap_Density_g/cm³']]
+
+            if model_used:
+                model = joblib.load(f"model_{model_used}.pkl")
+                pred = model.predict([features])[0]
+                predictions.append(pred)
             else:
                 predictions.append(np.nan)
                 continue

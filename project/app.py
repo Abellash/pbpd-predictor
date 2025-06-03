@@ -30,6 +30,7 @@ if material_choice == "Auto (via density)":
         material_group = "ss"
 else:
     material_group = material_choice.lower()
+    material_group = material_group.lower()
 
 st.header("Powder Properties")
 col1, col2 = st.columns(2)

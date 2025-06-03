@@ -69,7 +69,7 @@ for w in warnings:
 
 if st.button("Predict PBPD"):
     try:
-        model = joblib.load(f"model_{material_group}.pkl")
+        model = joblib.load(f"model_{material_group.lower()}.pkl")
         if material_group == "ti":
             features = [r23, span, tap_density]
         elif material_group == "ss":

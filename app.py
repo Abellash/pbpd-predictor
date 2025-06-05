@@ -4,7 +4,10 @@ import pandas as pd
 import joblib
 from fpdf import FPDF
 from datetime import datetime
+from scipy.stats import norm
 import io
+import shap
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="PBPD Predictor", layout="wide")
 
@@ -30,7 +33,6 @@ if material_choice == "Auto (via density)":
         material_group = "ss"
 else:
     material_group = material_choice.lower()
-    material_group = material_group.lower()
 
 st.header("Powder Properties")
 col1, col2 = st.columns(2)
@@ -51,8 +53,18 @@ span = (d90 - d10) / d50
 r23 = d23 / layer_thickness
 r34 = d34 / layer_thickness
 
+try:
+    log_d10, log_d50, log_d90 = np.log(d10), np.log(d50), np.log(d90)
+    sigma = (log_d90 - log_d10) / 2.563
+    mu = log_d50
+    prob_fines = norm.cdf(np.log(20), loc=mu, scale=sigma) * 100
+    fines_output = f"{prob_fines:.1f}%"
+except Exception:
+    fines_output = "N/A"
+
 st.subheader("Input Check")
 warnings = []
+st.info(f"Estimated % of fines <20 µm: **{fines_output}** (log-normal approximation)")
 
 if span < 0.8 or span > 2.0:
     warnings.append("Span is outside typical range (0.8–2.0).")
@@ -83,6 +95,11 @@ if st.button("Predict PBPD"):
 
         input_data = np.array([features])
         prediction = model.predict(input_data)[0]
+
+        st.session_state["model"] = model
+        st.session_state["features"] = features
+        st.session_state["material_group"] = material_group
+        st.session_state["prediction"] = prediction
 
         st.success(f"Predicted PBPD: **{prediction:.2f}%**")
 
@@ -128,6 +145,39 @@ if st.button("Predict PBPD"):
     except FileNotFoundError:
         st.error(f"Model for '{material_group.upper()}' not found. Make sure the model file exists.")
 
+if "model" in st.session_state and st.button("Explain Prediction"):
+    try:
+        model = st.session_state["model"]
+        features = st.session_state["features"]
+        material_group = st.session_state["material_group"]
+
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(np.array([features]))
+
+        if material_group == "ti":
+            feature_names = ["R23", "Span", "Tap Density"]
+        elif material_group == "ss":
+            feature_names = ["R23", "R34", "Span", "Tap Density", "HR"]
+        elif material_group == "al":
+            feature_names = ["R34", "Span", "Tap Density"]
+        else:
+            feature_names = [f"Feature {i}" for i in range(len(features))]
+
+        shap_df = pd.DataFrame({
+            'Feature': feature_names,
+            'SHAP Value': shap_values[0]
+        }).sort_values(by='SHAP Value', key=abs, ascending=False)
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.barh(shap_df['Feature'], shap_df['SHAP Value'], color='orange')
+        ax.set_xlabel("Impact on PBPD")
+        ax.set_title("SHAP Feature Importance")
+        ax.invert_yaxis()
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"SHAP explanation failed: {str(e)}")
+
 st.markdown("---")
 st.subheader("Batch Prediction via CSV")
 
@@ -170,9 +220,6 @@ if csv_file:
                 predictions.append(pred)
             else:
                 predictions.append(np.nan)
-                continue
-            pred = model.predict([features])[0]
-            predictions.append(pred)
 
         df['Predicted_PBPD_%'] = predictions
         st.success("Batch prediction complete.")
